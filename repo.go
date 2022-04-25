@@ -162,7 +162,7 @@ func NewRepo(remote, local string) (Repo, error) {
 	case Git:
 		return NewGitRepo(remote, local)
 	case Svn:
-		return NewSvnRepo(remote, local)
+		return NewSvnRepo(remote, local, "", "")
 	case Hg:
 		return NewHgRepo(remote, local)
 	case Bzr:
@@ -189,8 +189,8 @@ type CommitInfo struct {
 }
 
 type base struct {
-	remote, local string
-	Logger        *log.Logger
+	remote, local, username, password string
+	Logger                            *log.Logger
 }
 
 func (b *base) log(v interface{}) {
@@ -215,6 +215,14 @@ func (b *base) setLocalPath(local string) {
 	b.local = local
 }
 
+func (b *base) setUserName(username string) {
+	b.username = username
+}
+
+func (b *base) setPassword(password string) {
+	b.password = password
+}
+
 func (b base) run(cmd string, args ...string) ([]byte, error) {
 	out, err := exec.Command(cmd, args...).CombinedOutput()
 	b.log(out)
@@ -232,6 +240,12 @@ func (b *base) CmdFromDir(cmd string, args ...string) *exec.Cmd {
 }
 
 func (b *base) RunFromDir(cmd string, args ...string) ([]byte, error) {
+	if b.username != "" {
+		args = append(args, b.username)
+	}
+	if b.password != "" {
+		args = append(args, b.password)
+	}
 	c := b.CmdFromDir(cmd, args...)
 	out, err := c.CombinedOutput()
 	return out, err

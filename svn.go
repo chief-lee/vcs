@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -15,7 +16,7 @@ import (
 // need to be passed in. The remote location should include the branch for SVN.
 // For example, if the package is https://github.com/Masterminds/cookoo/ the remote
 // should be https://github.com/Masterminds/cookoo/trunk for the trunk branch.
-func NewSvnRepo(remote, local string) (*SvnRepo, error) {
+func NewSvnRepo(remote, local string, username string, password string) (*SvnRepo, error) {
 	ins := depInstalled("svn")
 	if !ins {
 		return nil, NewLocalError("svn is not installed", nil, "")
@@ -30,6 +31,8 @@ func NewSvnRepo(remote, local string) (*SvnRepo, error) {
 	r := &SvnRepo{}
 	r.setRemote(remote)
 	r.setLocalPath(local)
+	r.setUserName(username)
+	r.setPassword(password)
 	r.Logger = Logger
 
 	// Make sure the local SVN repo is configured the same as the remote when
@@ -141,7 +144,7 @@ func (s *SvnRepo) Version() (string, error) {
 		Commit Commit `xml:"entry>commit"`
 	}
 
-	out, err := s.RunFromDir("svn", "info", "--xml")
+	out, err := s.RunFromDir("svn", "info", "--xml", s.remote)
 	if err != nil {
 		return "", NewLocalError("Unable to retrieve checked out version", err, string(out))
 	}
@@ -292,7 +295,7 @@ func (s *SvnRepo) CommitInfo(id string) (*CommitInfo, error) {
 		}
 	}
 
-	out, err := s.RunFromDir("svn", "log", "-r", id, "--xml")
+	out, err := s.RunFromDir("svn", "log", "-r", id, "--xml", s.remote)
 	if err != nil {
 		return nil, NewRemoteError("Unable to retrieve commit information", err, string(out))
 	}
@@ -330,6 +333,18 @@ func (s *SvnRepo) CommitInfo(id string) (*CommitInfo, error) {
 	}
 
 	return ci, nil
+}
+
+func (s *SvnRepo) CommitInfos(beginID int, endID int) ([]*CommitInfo, error) {
+	var res []*CommitInfo
+	for curRevision := beginID; curRevision <= endID; curRevision++ {
+		info, err := s.CommitInfo(strconv.Itoa(curRevision))
+		if err != nil {
+			continue
+		}
+		res = append(res, info)
+	}
+	return res, nil
 }
 
 // TagsFromCommit retrieves tags from a commit id.
