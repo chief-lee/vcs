@@ -1,3 +1,3 @@
-module github.com/chief-lee/vcs
+module github.com/Masterminds/vcs
 
 go 1.17
