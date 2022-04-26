@@ -379,6 +379,39 @@ func (s *SvnRepo) isUnableToCreateDir(err error) bool {
 	return strings.HasPrefix(msg, "E000002")
 }
 
+func (s *SvnRepo) FirstRevision() (string, error) {
+	out, err := s.RunFromDir("svn", "log", "--stop-on-copy", "--xml", s.remote)
+	if err != nil {
+		return "", NewRemoteError("Unable to retrieve log information", err, string(out))
+	}
+
+	type Logentry struct {
+		Revision string `xml:"revision,attr"`
+		Author   string `xml:"author"`
+		Date     string `xml:"date"`
+		Msg      string `xml:"msg"`
+	}
+	type Log struct {
+		XMLName xml.Name   `xml:"log"`
+		Logs    []Logentry `xml:"logentry"`
+	}
+
+	logs := &Log{}
+	err = xml.Unmarshal(out, &logs)
+	if err != nil {
+		return "", NewLocalError("Unable to retrieve log information", err, string(out))
+	}
+	if len(logs.Logs) == 0 {
+		return "nil", ErrRevisionUnavailable
+	}
+
+	logLength := len(logs.Logs)
+	var firstRevision string
+	firstRevision = logs.Logs[logLength-1].Revision
+
+	return firstRevision, nil
+}
+
 // detectRemoteFromInfoCommand finds the remote url from the `svn info`
 // command's output without using  a regex. We avoid regex because URLs
 // are notoriously complex to accurately match with a regex and
