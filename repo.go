@@ -186,6 +186,9 @@ type CommitInfo struct {
 
 	// Commit message
 	Message string
+
+	// Action
+	Paths Paths
 }
 
 type base struct {
@@ -241,10 +244,10 @@ func (b *base) CmdFromDir(cmd string, args ...string) *exec.Cmd {
 
 func (b *base) RunFromDir(cmd string, args ...string) ([]byte, error) {
 	if b.username != "" {
-		args = append(args, b.username)
+		args = append(args, "--username", b.username)
 	}
 	if b.password != "" {
-		args = append(args, b.password)
+		args = append(args, "--password", b.password)
 	}
 	c := b.CmdFromDir(cmd, args...)
 	out, err := c.CombinedOutput()

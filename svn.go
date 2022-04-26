@@ -7,10 +7,53 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 )
+
+//type Logentry struct {
+//	Revision string `xml:"revision,attr"`
+//	Author   string `xml:"author"`
+//	Date     string `xml:"date"`
+//	Msg      string `xml:"msg"`
+//	Paths    Plans  `xml:"paths"`
+//}
+//
+type Paths struct {
+	Text string `xml:",chardata"`
+	Path []struct {
+		Text     string `xml:",chardata"`
+		PropMods string `xml:"prop-mods,attr"`
+		TextMods string `xml:"text-mods,attr"`
+		Kind     string `xml:"kind,attr"`
+		Action   string `xml:"action,attr"`
+	} `xml:"path"`
+}
+
+//type Path struct {
+//	PropMods string `xml:"prop_mods,attr"`
+//	TextMods string `xml:"text_mods,attr"`
+//	Kind     string `xml:"kind,attr"`
+//	Action   string `xml:"action,attr"`
+//}
+//
+//type Log struct {
+//	XMLName xml.Name   `xml:"log"`
+//	Logs    []Logentry `xml:"logentry"`
+//}
+
+type Log struct {
+	XMLName  xml.Name `xml:"log"`
+	Text     string   `xml:",chardata"`
+	Logentry []struct {
+		Text     string `xml:",chardata"`
+		Revision string `xml:"revision,attr"`
+		Author   string `xml:"author"`
+		Date     string `xml:"date"`
+		Paths    Paths  `xml:"paths"`
+		Msg      string `xml:"msg"`
+	} `xml:"logentry"`
+}
 
 // NewSvnRepo creates a new instance of SvnRepo. The remote and local directories
 // need to be passed in. The remote location should include the branch for SVN.
@@ -300,33 +343,24 @@ func (s *SvnRepo) CommitInfo(id string) (*CommitInfo, error) {
 		return nil, NewRemoteError("Unable to retrieve commit information", err, string(out))
 	}
 
-	type Logentry struct {
-		Author string `xml:"author"`
-		Date   string `xml:"date"`
-		Msg    string `xml:"msg"`
-	}
-	type Log struct {
-		XMLName xml.Name   `xml:"log"`
-		Logs    []Logentry `xml:"logentry"`
-	}
-
 	logs := &Log{}
 	err = xml.Unmarshal(out, &logs)
 	if err != nil {
 		return nil, NewLocalError("Unable to retrieve commit information", err, string(out))
 	}
-	if len(logs.Logs) == 0 {
+	if len(logs.Logentry) == 0 {
 		return nil, ErrRevisionUnavailable
 	}
 
 	ci := &CommitInfo{
 		Commit:  id,
-		Author:  logs.Logs[0].Author,
-		Message: logs.Logs[0].Msg,
+		Author:  logs.Logentry[0].Author,
+		Message: logs.Logentry[0].Msg,
+		Paths:   logs.Logentry[0].Paths,
 	}
 
-	if len(logs.Logs[0].Date) > 0 {
-		ci.Date, err = time.Parse(time.RFC3339Nano, logs.Logs[0].Date)
+	if len(logs.Logentry[0].Date) > 0 {
+		ci.Date, err = time.Parse(time.RFC3339Nano, logs.Logentry[0].Date)
 		if err != nil {
 			return nil, NewLocalError("Unable to retrieve commit information", err, string(out))
 		}
@@ -335,16 +369,38 @@ func (s *SvnRepo) CommitInfo(id string) (*CommitInfo, error) {
 	return ci, nil
 }
 
-func (s *SvnRepo) CommitInfos(beginID int, endID int) ([]*CommitInfo, error) {
-	var res []*CommitInfo
-	for curRevision := beginID; curRevision <= endID; curRevision++ {
-		info, err := s.CommitInfo(strconv.Itoa(curRevision))
-		if err != nil {
-			continue
-		}
-		res = append(res, info)
+func (s *SvnRepo) CommitInfos(beginID string, endID string) ([]*CommitInfo, error) {
+	revisionRange := fmt.Sprintf("%s:%s", beginID, endID)
+	out, err := s.RunFromDir("svn", "log", "-r", revisionRange, "-v", "--xml", s.remote)
+	if err != nil {
+		return nil, NewRemoteError("Unable to retrieve commit information", err, string(out))
 	}
-	return res, nil
+
+	logs := &Log{}
+	err = xml.Unmarshal(out, &logs)
+	if err != nil {
+		return nil, NewLocalError("Unable to retrieve commit information", err, string(out))
+	}
+	if len(logs.Logentry) == 0 {
+		return nil, ErrRevisionUnavailable
+	}
+
+	var cis []*CommitInfo
+
+	for _, ci := range logs.Logentry {
+		date, err := time.Parse(time.RFC3339Nano, ci.Date)
+		if err != nil {
+		}
+		cis = append(cis, &CommitInfo{
+			Commit:  ci.Revision,
+			Author:  ci.Author,
+			Date:    date,
+			Message: ci.Msg,
+			Paths:   ci.Paths,
+		})
+	}
+
+	return cis, nil
 }
 
 // TagsFromCommit retrieves tags from a commit id.
@@ -385,29 +441,18 @@ func (s *SvnRepo) FirstRevision() (string, error) {
 		return "", NewRemoteError("Unable to retrieve log information", err, string(out))
 	}
 
-	type Logentry struct {
-		Revision string `xml:"revision,attr"`
-		Author   string `xml:"author"`
-		Date     string `xml:"date"`
-		Msg      string `xml:"msg"`
-	}
-	type Log struct {
-		XMLName xml.Name   `xml:"log"`
-		Logs    []Logentry `xml:"logentry"`
-	}
-
 	logs := &Log{}
 	err = xml.Unmarshal(out, &logs)
 	if err != nil {
 		return "", NewLocalError("Unable to retrieve log information", err, string(out))
 	}
-	if len(logs.Logs) == 0 {
+	if len(logs.Logentry) == 0 {
 		return "nil", ErrRevisionUnavailable
 	}
 
-	logLength := len(logs.Logs)
+	logLength := len(logs.Logentry)
 	var firstRevision string
-	firstRevision = logs.Logs[logLength-1].Revision
+	firstRevision = logs.Logentry[logLength-1].Revision
 
 	return firstRevision, nil
 }
