@@ -11,14 +11,30 @@ import (
 	"time"
 )
 
-//type Logentry struct {
-//	Revision string `xml:"revision,attr"`
-//	Author   string `xml:"author"`
-//	Date     string `xml:"date"`
-//	Msg      string `xml:"msg"`
-//	Paths    Plans  `xml:"paths"`
-//}
-//
+type Info struct {
+	XMLName xml.Name `xml:"info"`
+	Text    string   `xml:",chardata"`
+	Entry   struct {
+		Text        string `xml:",chardata"`
+		Path        string `xml:"path,attr"`
+		Revision    string `xml:"revision,attr"`
+		Kind        string `xml:"kind,attr"`
+		URL         string `xml:"url"`
+		RelativeURL string `xml:"relative-url"`
+		Repository  struct {
+			Text string `xml:",chardata"`
+			Root string `xml:"root"`
+			Uuid string `xml:"uuid"`
+		} `xml:"repository"`
+		Commit struct {
+			Text     string `xml:",chardata"`
+			Revision string `xml:"revision,attr"`
+			Author   string `xml:"author"`
+			Date     string `xml:"date"`
+		} `xml:"commit"`
+	} `xml:"entry"`
+}
+
 type Paths struct {
 	Text string `xml:",chardata"`
 	Path []struct {
@@ -29,18 +45,6 @@ type Paths struct {
 		Action   string `xml:"action,attr"`
 	} `xml:"path"`
 }
-
-//type Path struct {
-//	PropMods string `xml:"prop_mods,attr"`
-//	TextMods string `xml:"text_mods,attr"`
-//	Kind     string `xml:"kind,attr"`
-//	Action   string `xml:"action,attr"`
-//}
-//
-//type Log struct {
-//	XMLName xml.Name   `xml:"log"`
-//	Logs    []Logentry `xml:"logentry"`
-//}
 
 type Log struct {
 	XMLName  xml.Name `xml:"log"`
@@ -199,6 +203,22 @@ func (s *SvnRepo) Version() (string, error) {
 	}
 
 	return infos.Commit.Revision, nil
+}
+
+func (s *SvnRepo) Repository() (string, error) {
+
+	out, err := s.RunFromDir("svn", "info", "--xml", s.remote)
+	if err != nil {
+		return "", NewLocalError("Unable to retrieve checked out version", err, string(out))
+	}
+	s.log(out)
+	infos := &Info{}
+	err = xml.Unmarshal(out, &infos)
+	if err != nil {
+		return "", NewLocalError("Unable to retrieve checked out version", err, string(out))
+	}
+
+	return infos.Entry.Repository.Root, nil
 }
 
 // Current returns the current version-ish. This means:
