@@ -217,7 +217,9 @@ func (s *SvnRepo) Repository() (string, error) {
 	if err != nil {
 		return "", NewLocalError("Unable to retrieve checked out version", err, string(out))
 	}
-
+	if len(infos.Entry.RelativeURL) > 1 {
+		return fmt.Sprintf("%s%s", infos.Entry.Repository.Root, infos.Entry.RelativeURL[1:]), nil
+	}
 	return infos.Entry.Repository.Root, nil
 }
 
