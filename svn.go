@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -389,6 +390,11 @@ func (s *SvnRepo) CommitInfo(id string) (*CommitInfo, error) {
 }
 
 func (s *SvnRepo) CommitInfos(beginID string, endID string) ([]*CommitInfo, error) {
+	beginIDIntVal, _ := strconv.Atoi(beginID)
+	endIDIntVal, _ := strconv.Atoi(endID)
+	if beginIDIntVal > endIDIntVal {
+		return nil, nil
+	}
 	revisionRange := fmt.Sprintf("%s:%s", beginID, endID)
 	out, err := s.RunFromDir("svn", "log", "-r", revisionRange, "-v", "--xml", s.remote)
 	if err != nil {
