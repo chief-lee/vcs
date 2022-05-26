@@ -221,6 +221,20 @@ func (s *SvnRepo) Repository() (string, error) {
 	return infos.Entry.URL, nil
 }
 
+func (s *SvnRepo) Info() (*Info, error) {
+	out, err := s.RunFromDir("svn", "info", "--xml", s.remote)
+	if err != nil {
+		return nil, NewLocalError("Unable to retrieve checked out version", err, string(out))
+	}
+	s.log(out)
+	info := &Info{}
+	err = xml.Unmarshal(out, &info)
+	if err != nil {
+		return nil, NewLocalError("Unable to retrieve checked out version", err, string(out))
+	}
+	return info, nil
+}
+
 // Current returns the current version-ish. This means:
 // * HEAD if on the tip.
 // * Otherwise a revision id
