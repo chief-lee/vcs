@@ -442,6 +442,39 @@ func (s *SvnRepo) CommitInfos(beginID string, endID string) ([]*CommitInfo, erro
 	return cis, nil
 }
 
+func (s *SvnRepo) Search(pattern string, limit int) ([]*CommitInfo, error) {
+	out, err := s.RunFromDir("svn", "log", "-l", strconv.Itoa(limit), "-v", "--xml", "--search", pattern, s.remote)
+	if err != nil {
+		return nil, NewRemoteError("Unable to retrieve commit information", err, string(out))
+	}
+
+	logs := &Log{}
+	err = xml.Unmarshal(out, &logs)
+	if err != nil {
+		return nil, NewLocalError("Unable to retrieve commit information", err, string(out))
+	}
+	if len(logs.Logentry) == 0 {
+		return nil, ErrRevisionUnavailable
+	}
+
+	var cis []*CommitInfo
+
+	for _, ci := range logs.Logentry {
+		date, err := time.Parse(time.RFC3339Nano, ci.Date)
+		if err != nil {
+		}
+		cis = append(cis, &CommitInfo{
+			Commit:  ci.Revision,
+			Author:  ci.Author,
+			Date:    date,
+			Message: ci.Msg,
+			Paths:   ci.Paths,
+		})
+	}
+
+	return cis, nil
+}
+
 // TagsFromCommit retrieves tags from a commit id.
 func (s *SvnRepo) TagsFromCommit(id string) ([]string, error) {
 	// Svn tags are a convention implemented as paths. See the details on the
